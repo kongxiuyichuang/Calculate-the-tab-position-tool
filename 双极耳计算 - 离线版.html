@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tab Position Calculation</title>
+  <script src="./plotly-latest.min.js"></script>
+  <style>
+    /* 整体页面采用垂直方向 Flex 布局，充满整个视口 */
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
+    /* 上半部分 - 分为左右两个区域，约占总高度 60% */
+    #upper-section {
+      display: flex;
+      flex: 6;
+      overflow: auto;
+    }
+    
+    /* 左侧输入区域 */
+    #input-section {
+      width: 600px;
+      padding: 20px;
+      border-right: 1px solid #ccc;
+      box-sizing: border-box;
+      resize: horizontal;
+      overflow: auto;
+    }
+    
+    /* 优化标题样式 */
+    #input-section h1 {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #0078D7;
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 5px;
+    }
+    
+    /* 输入区域 - 使用 Flex 垂直布局，每行一对标签与输入框 */
+    .input-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .form-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .form-row label {
+      text-align: left;
+      flex: 1;
+    }
+    
+    .form-row input,
+    .form-row select {
+      text-align: right;
+      width: 150px; /* 统一设置输入框宽度 */
+      padding: 5px;
+      box-sizing: border-box;
+    }
+    
+    /* 按钮样式优化 */
+    button {
+      background-color: #0078D7;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    
+    button:hover {
+      background-color: #005a9e;
+    }
+    
+    /* 右侧绘图区，内容居中显示 */
+    #plot1-section {
+      flex: 1;
+      padding: 20px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+    
+    /* windingPlot 保持正方形 */
+    #windingPlot {
+      width: 100%;
+      max-width: 750px;
+      aspect-ratio: 1;
+      border: 1px solid #ccc;
+      resize: both;
+      overflow: auto;
+    }
+    
+    /* 中间区域：用于绘制 dimensionsPlot，约占 20% 高度 */
+    #middle-section {
+      flex: 2;
+      padding: 20px;
+      box-sizing: border-box;
+      border-top: 1px solid #ccc;
+      overflow: auto;
+    }
+    
+    #dimensionsPlot {
+      width: 100%;
+      height: 100%;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    
+    /* 下方日志区域，约占 20% 高度 */
+    #lower-section {
+      flex: 2;
+      padding: 20px;
+      box-sizing: border-box;
+      border-top: 1px solid #ccc;
+      overflow: auto;
+    }
+    
+    .log-container {
+      width: 100%;
+      height: 100%;
+      padding: 10px;
+      background-color: rgba(255,255,255,0.8);
+      border: 1px solid #eee;
+      font-size: 0.8em;
+      white-space: pre-wrap;
+      resize: both;
+      box-sizing: border-box;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <!-- 上半部分：左侧输入区域 / 右侧绘图区 -->
+  <div id="upper-section">
+    <div id="input-section">
+      <h1>Tab Position Calculation</h1>
+      <div class="input-container">
+        <div class="form-row">
+          <label for="neg_thickness">负极双面料厚 (um):</label>
+          <input type="number" id="neg_thickness" value="95">
+        </div>
+        <div class="form-row">
+          <label for="sep_thickness">隔膜厚度 (um):</label>
+          <input type="number" id="sep_thickness" value="12">
+        </div>
+        <div class="form-row">
+          <label for="pos_thickness">正极双面料厚 (um):</label>
+          <input type="number" id="pos_thickness" value="77">
+        </div>
+        <div class="form-row">
+          <label for="foil_pos_thickness">正极箔材厚度 (um):</label>
+          <input type="number" id="foil_pos_thickness" value="12">
+        </div>
+        <div class="form-row">
+          <label for="foil_neg_thickness">负极箔材厚度 (um):</label>
+          <input type="number" id="foil_neg_thickness" value="8">
+        </div>
+        <div class="form-row">
+          <label for="sep_arc_length">隔膜入位空卷长度 (mm):</label>
+          <input type="number" id="sep_arc_length" value="16">
+        </div>
+        <div class="form-row">
+          <label for="L_neg_star">负极入位长度 (mm):</label>
+          <input type="number" id="L_neg_star" value="6">
+        </div>
+        <div class="form-row">
+          <label for="nail_a">卷针半径 (mm):</label>
+          <input type="number" id="nail_a" value="1.75">
+        </div>
+        <div class="form-row">
+          <label for="pos_length">正极滚压后长度 (mm):</label>
+          <input type="number" id="pos_length" value="1411">
+        </div>
+        <div class="form-row">
+          <label for="neg_length">负极滚压后长度 (mm):</label>
+          <input type="number" id="neg_length" value="1461">
+        </div>
+        <div class="form-row">
+          <label for="w">极耳滚压前留白宽度 (mm):</label>
+          <input type="number" id="w" value="11">
+        </div>
+        <div class="form-row">
+          <label for="L_first">负极第一段涂布滚压后长度 (mm):</label>
+          <input type="number" id="L_first" value="340">
+        </div>
+        <div class="form-row">
+          <label for="L_second">负极第二段涂布滚压后长度 (mm):</label>
+          <input type="number" id="L_second" value="700">
+        </div>
+        <div class="form-row">
+          <label for="el_rate">极片延展率:</label>
+          <input type="number" id="el_rate" value="1.02">
+        </div>
+        <div class="form-row">
+          <label for="calculate_flag">计算标签 (pos/neg):</label>
+          <select id="calculate_flag">
+            <option value="pos" selected>pos</option>
+            <option value="neg">neg</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="calculateAndPlot()">Calculate and Plot</button>
+    </div>
+    <div id="plot1-section">
+      <div id="windingPlot">
+        <!-- Plotly 渲染图表的区域 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 中间部分：Dimensions Plot -->
+  <div id="middle-section">
+    <div id="dimensionsPlot">
+      <!-- 绘制 dimensionsPlot 的区域 -->
+    </div>
+  </div>
+
+  <!-- 下方：日志输出区域 -->
+  <div id="lower-section">
+    <div class="log-container" id="log-output">
+      <!-- 日志信息显示区域 -->
+    </div>
+  </div>
+
+    <script>
+        function solve_arc(a, b, theta_start, theta_end) {
+            const L = (a, b, theta) => {
+                const sqrtTerm = Math.sqrt(b * b * theta * theta + 2 * a * b * theta + a * a + b * b);
+                const logTerm = Math.log(Math.abs(b * theta + a + sqrtTerm));
+                return ((b * b * theta + a * b) / (2 * b * b)) * sqrtTerm + (b / 2) * logTerm;
+            };
+            return L(a, b, theta_end) - L(a, b, theta_start);
+        }
+
+        // 使用 Newton 法求解 f(theta)=arc_length(a,b,theta_start,theta)-s_know = 0
+        function solveThetaNewton(a, b, theta_start, s_know) {
+          function f(theta) {
+            return solve_arc(a, b, theta_start, theta) - s_know;
+          }
+          // f'(theta) = d/dtheta L(a, b, theta) = sqrt(b^2*theta^2 + 2*a*b*theta + a^2 + b^2)
+          function fp(theta) {
+            return Math.sqrt(b * b * theta * theta + 2 * a * b * theta + a * a + b * b);
+          }
+          // 初始猜测：使用 s_know 除以 fp(0)
+          let theta = s_know / fp(0);
+          const tolerance = 1e-6;
+          const maxIterations = 500;
+          let iteration = 0;
+          while (Math.abs(f(theta)) > tolerance && iteration < maxIterations) {
+            theta = theta - f(theta) / fp(theta);
+            iteration++;
+          }
+          return theta;
+        }
+
+        function plot_edge(a, b, theta_star, theta_end_rad, T, color_label, inner_outer_label, legend_label) {
+            const numPoints = 10000;
+            const theta_list = linspace(theta_star, theta_star + theta_end_rad, numPoints);
+            const r_mid = theta_list.map(theta => a + b * (theta - theta_star));
+            const x_mid = r_mid.map((r, i) => r * Math.cos(theta_list[i]));
+            const y_mid = r_mid.map((r, i) => r * Math.sin(theta_list[i]));
+
+            const trace_mid = {
+                x: x_mid,
+                y: y_mid,
+                mode: 'lines',
+                line: { color: color_label, width: 2 },
+                name:  `${legend_label}-mid`
+            };
+
+            const traces = [trace_mid];
+
+            if (inner_outer_label) {
+                const r_inner = r_mid.map(r => r - T / 2);
+                const x_inner = r_inner.map((r, i) => r * Math.cos(theta_list[i]));
+                const y_inner = r_inner.map((r, i) => r * Math.sin(theta_list[i]));
+                traces.push({
+                    x: x_inner,
+                    y: y_inner,
+                    mode: 'lines',
+                    line: { color: color_label, dash: 'dash', width: 1 },
+                    name: `${legend_label}-inner`
+                });
+
+                const r_outer = r_mid.map(r => r + T / 2);
+                const x_outer = r_outer.map((r, i) => r * Math.cos(theta_list[i]));
+                const y_outer = r_outer.map((r, i) => r * Math.sin(theta_list[i]));
+                traces.push({
+                    x: x_outer,
+                    y: y_outer,
+                    mode: 'lines',
+                    line: { color: color_label, dash: 'dash', width: 1 },
+                    name: `${legend_label}-outer`
+                });
+            }
+
+            return traces;
+        }
+
+        function linspace(start, end, count) {
+            const result = [];
+            for (let i = 0; i < count; i++) {
+                result.push(start + (end - start) * i / (count - 1));
+            }
+            return result;
+        }
+
+        function calculateAndPlot() {
+            // 1. 参数提取
+            const neg_thickness = parseFloat(document.getElementById('neg_thickness').value) / 1000;
+            const sep_thickness = parseFloat(document.getElementById('sep_thickness').value) / 1000;
+            const pos_thickness = parseFloat(document.getElementById('pos_thickness').value) / 1000;
+            const foil_pos_thickness = parseFloat(document.getElementById('foil_pos_thickness').value) / 1000;
+            const foil_neg_thickness = parseFloat(document.getElementById('foil_neg_thickness').value) / 1000;
+            const sep_arc_length = parseFloat(document.getElementById('sep_arc_length').value);
+            const pos_length = parseFloat(document.getElementById('pos_length').value);
+            const neg_length = parseFloat(document.getElementById('neg_length').value);
+            const nail_a = parseFloat(document.getElementById('nail_a').value);
+            const w = parseFloat(document.getElementById('w').value) * parseFloat(document.getElementById('el_rate').value);
+            const L_neg_star = parseFloat(document.getElementById('L_neg_star').value);
+            const L_first = parseFloat(document.getElementById('L_first').value);
+            const L_second = parseFloat(document.getElementById('L_second').value);
+            const el_rate = parseFloat(document.getElementById('el_rate').value);
+            const calculate_flag = document.getElementById('calculate_flag').value; // Modified to get value from select
+
+            // Declare second_true here
+            let second_true;
+
+            // Clear previous logs
+            document.getElementById('log-output').innerHTML = '';
+
+            // 2. 隔膜中线及厚度边界计算
+            const sep_b = (sep_thickness * 2) / (2 * Math.PI);
+            const sep_theta = solveThetaNewton(nail_a + sep_thickness, sep_b, 0, sep_arc_length);
+            const sep_r = nail_a + sep_b * sep_theta;
+
+            const plot_theta_list_sep = linspace(0, sep_theta, 2000);
+            const plot_r_sep = plot_theta_list_sep.map(theta => nail_a + sep_b * theta);
+            const plot_x_sep = plot_r_sep.map((r, i) => r * Math.cos(plot_theta_list_sep[i]));
+            const plot_y_sep = plot_r_sep.map((r, i) => r * Math.sin(plot_theta_list_sep[i]));
+
+            const T_sep = sep_thickness * 2;
+            const plot_r_sep_inner = plot_r_sep.map(r => r - T_sep / 2);
+            const plot_r_sep_outer = plot_r_sep.map(r => r + T_sep / 2);
+
+            const plot_x_sep_inner = plot_r_sep_inner.map((r, i) => r * Math.cos(plot_theta_list_sep[i]));
+            const plot_y_sep_inner = plot_r_sep_inner.map((r, i) => r * Math.sin(plot_theta_list_sep[i]));
+            const plot_x_sep_outer = plot_r_sep_outer.map((r, i) => r * Math.cos(plot_theta_list_sep[i]));
+            const plot_y_sep_outer = plot_r_sep_outer.map((r, i) => r * Math.sin(plot_theta_list_sep[i]));
+
+            // 3. 绘制隔膜空卷
+            const trace_sep_mid = { x: plot_x_sep, y: plot_y_sep, mode: 'lines', line: { color: 'blue' }, name: 'sep-start-mid' };
+            const trace_sep_inner = { x: plot_x_sep_inner, y: plot_y_sep_inner, mode: 'lines', line: { color: 'blue', dash: 'dash' }, name: 'sep-start-inner' };
+            const trace_sep_outer = { x: plot_x_sep_outer, y: plot_y_sep_outer, mode: 'lines', line: { color: 'blue', dash: 'dash' }, name: 'sep-start-outer' };
+            const windingData = [trace_sep_mid, trace_sep_inner, trace_sep_outer];
+
+            // 4. 负极几何计算
+            const neg_a = sep_r - sep_thickness + (neg_thickness + foil_neg_thickness) / 2;
+            const neg_b = (neg_thickness + foil_neg_thickness) / (2 * Math.PI);
+            const neg_arc_length = L_neg_star;
+            const neg_theta = solveThetaNewton(neg_a, neg_b, 0, neg_arc_length);
+            const neg_r_end = neg_a + neg_b * neg_theta;
+
+            const neg_total_thickness = neg_thickness + foil_neg_thickness;
+            const plot_theta_list_neg = linspace(sep_theta, sep_theta + neg_theta, 2000);
+            const plot_r_neg = plot_theta_list_neg.map(theta => neg_a + neg_b * (theta - sep_theta));
+            const plot_x_neg = plot_r_neg.map((r, i) => r * Math.cos(plot_theta_list_neg[i]));
+            const plot_y_neg = plot_r_neg.map((r, i) => r * Math.sin(plot_theta_list_neg[i]));
+
+            const T_neg = neg_total_thickness;
+            const plot_r_neg_inner = plot_r_neg.map(r => r - T_neg / 2);
+            const plot_r_neg_outer = plot_r_neg.map(r => r + T_neg / 2);
+            const plot_x_neg_inner = plot_r_neg_inner.map((r, i) => r * Math.cos(plot_theta_list_neg[i]));
+            const plot_y_neg_inner = plot_r_neg_inner.map((r, i) => r * Math.sin(plot_theta_list_neg[i]));
+            const plot_x_neg_outer = plot_r_neg_outer.map((r, i) => r * Math.cos(plot_theta_list_neg[i]));
+            const plot_y_neg_outer = plot_r_neg_outer.map((r, i) => r * Math.sin(plot_theta_list_neg[i]));
+
+            // 5. 绘制负极入位
+            windingData.push({ x: plot_x_neg, y: plot_y_neg, mode: 'lines', line: { color: 'red', width: 2 }, name: 'neg-start-mid' });
+            windingData.push({ x: plot_x_neg_inner, y: plot_y_neg_inner, mode: 'lines', line: { color: 'red', dash: 'dash' }, name: 'neg-start-inner' });
+            windingData.push({ x: plot_x_neg_outer, y: plot_y_neg_outer, mode: 'lines', line: { color: 'red', dash: 'dash' }, name: 'neg-start-outer' });
+
+            // 6. 绘制负极入位处与隔膜的衔接
+            const inner_sep_x = plot_r_neg_inner.map((r, i) => (r - sep_thickness / 2) * Math.cos(plot_theta_list_neg[i]));
+            const inner_sep_y = plot_r_neg_inner.map((r, i) => (r - sep_thickness / 2) * Math.sin(plot_theta_list_neg[i]));
+            windingData.push({ x: inner_sep_x, y: inner_sep_y, mode: 'lines', line: { color: 'blue', width: 2 }, showlegend: false });
+            const inner_sep_x_inner = plot_r_neg_inner.map((r, i) => (r - sep_thickness) * Math.cos(plot_theta_list_neg[i]));
+            const inner_sep_y_inner = plot_r_neg_inner.map((r, i) => (r - sep_thickness) * Math.sin(plot_theta_list_neg[i]));
+            windingData.push({ x: inner_sep_x_inner, y: inner_sep_y_inner, mode: 'lines', line: { color: 'blue', dash: 'dash' }, showlegend: false });
+            windingData.push({ x: plot_x_neg_inner, y: plot_y_neg_inner, mode: 'lines', line: { color: 'blue', dash: 'dash' }, showlegend: false });
+
+            const outer_sep_x = plot_r_neg_outer.map((r, i) => (r + sep_thickness / 2) * Math.cos(plot_theta_list_neg[i]));
+            const outer_sep_y = plot_r_neg_outer.map((r, i) => (r - sep_thickness / 2) * Math.sin(plot_theta_list_neg[i]));
+            windingData.push({ x: outer_sep_x, y: outer_sep_y, mode: 'lines', line: { color: 'blue', width: 2 }, showlegend: false });
+            const outer_sep_x_outer = plot_r_neg_outer.map((r, i) => (r + sep_thickness) * Math.cos(plot_theta_list_neg[i]));
+            const outer_sep_y_outer = plot_r_neg_outer.map((r, i) => (r - sep_thickness) * Math.sin(plot_theta_list_neg[i]));
+            windingData.push({ x: outer_sep_x_outer, y: outer_sep_y_outer, mode: 'lines', line: { color: 'blue', dash: 'dash' }, showlegend: false });
+            windingData.push({ x: plot_x_neg_outer, y: plot_y_neg_outer, mode: 'lines', line: { color: 'blue', dash: 'dash' }, showlegend: false });
+
+            // 7. 后续水平——同卷时隔膜、负极和正极
+            const a_sep1 = plot_r_neg_inner[plot_r_neg_inner.length - 1] - sep_thickness / 2;
+            const b_sep1 = (sep_thickness * 2 + neg_thickness + foil_neg_thickness + pos_thickness + foil_pos_thickness) / (2 * Math.PI);
+            const a_sep2 = plot_r_neg_outer[plot_r_neg_outer.length - 1] + sep_thickness / 2;
+            const b_sep2 = b_sep1;
+
+            const a_neg1 = plot_r_neg[plot_r_neg.length - 1];
+            const b_neg1 = b_sep1;
+            const a_pos = a_sep2 + sep_thickness / 2 + (pos_thickness + foil_pos_thickness) / 2;
+            const b_pos = b_sep1;
+
+            const theta_pos_end = solveThetaNewton(a_pos, b_pos, 0, pos_length);
+            const theta_neg_end = solveThetaNewton(a_neg1, b_neg1, 0, neg_length - neg_arc_length);
+
+            const pos_traces = plot_edge(a_pos, b_pos, sep_theta + neg_theta, theta_pos_end, (pos_thickness + foil_pos_thickness), 'black', true, 'pos');
+            windingData.push(...pos_traces);
+            const neg_traces = plot_edge(a_neg1, b_neg1, sep_theta + neg_theta, theta_neg_end, (neg_thickness + foil_neg_thickness), 'red', true, 'neg');
+            windingData.push(...neg_traces);
+            const sep1_traces = plot_edge(a_sep1, b_sep1, sep_theta + neg_theta, theta_neg_end + Math.PI / 3, sep_thickness, 'green', false, 'sep1');
+            windingData.push(...sep1_traces);
+            const sep2_traces = plot_edge(a_sep2, b_sep2, sep_theta + neg_theta, theta_neg_end + Math.PI / 3, sep_thickness, 'magenta', false, 'sep2');
+            windingData.push(...sep2_traces);
+
+            let tab1_theta_rad, tab2_theta_rad, point1_r, point2_r;
+
+            // 8. 计算双极耳位置
+            if (calculate_flag === "neg") {
+                const L_total = neg_length;
+                const theta_neg_first = solveThetaNewton(a_neg1, b_neg1, 0, L_first - neg_arc_length + w / 2);
+                const num = Math.ceil((sep_theta + neg_theta + theta_neg_end) / (2 * Math.PI) - (sep_theta + neg_theta + theta_neg_first) / (2 * Math.PI));
+                const arc_length_second = Array(num).fill(Infinity);
+                for (let k = 0; k < num; k++) {
+                    arc_length_second[k] = solve_arc(a_neg1, b_neg1, 0, theta_neg_first + k * 2 * Math.PI);
+                }
+                const diff = arc_length_second.map(len => len - (L_second + L_first - neg_arc_length + w + w / 2));
+                let min_diff = Infinity;
+                let index = -1;
+                for (let i = 0; i < diff.length; i++) {
+                    if (Math.abs(diff[i]) < min_diff) {
+                        min_diff = Math.abs(diff[i]);
+                        index = i;
+                    }
+                }
+
+                second_true = arc_length_second[index] - w - (L_first - neg_arc_length) - w / 2;
+
+                // 可视化
+                const point1_theta_val = solveThetaNewton(a_neg1, b_neg1, 0, L_first - neg_arc_length + w / 2);
+                tab1_theta_rad = point1_theta_val + sep_theta + neg_theta;
+                point1_r = a_neg1 + b_neg1 * point1_theta_val;
+                windingData.push({
+                    x: [point1_r * Math.cos(tab1_theta_rad)],
+                    y: [point1_r * Math.sin(tab1_theta_rad)],
+                    mode: 'markers',
+                    marker: { color: 'red', size: 8 },
+                    name: 'tab1'
+                });
+
+                const point2_theta_val = solveThetaNewton(a_neg1, b_neg1, 0, L_first - neg_arc_length + w + second_true + w / 2);
+                tab2_theta_rad = point2_theta_val + sep_theta + neg_theta;
+                point2_r = a_neg1 + b_neg1 * point2_theta_val;
+                windingData.push({
+                    x: [point2_r * Math.cos(tab2_theta_rad)],
+                    y: [point2_r * Math.sin(tab2_theta_rad)],
+                    mode: 'markers',
+                    marker: { color: 'red', size: 8 },
+                    name: 'tab2'
+                });
+
+            } else if (calculate_flag === "pos") {
+                const L_total = pos_length;
+                const theta_pos_first = solveThetaNewton(a_pos, b_pos, 0, L_first + w / 2);
+                const num = Math.ceil((sep_theta + neg_theta + theta_pos_end) / (2 * Math.PI) - (sep_theta + neg_theta + theta_pos_first) / (2 * Math.PI));
+                const arc_length_second = Array(num).fill(Infinity);
+                for (let k = 0; k < num; k++) {
+                    arc_length_second[k] = solve_arc(a_pos, b_pos, 0, theta_pos_first + k * 2 * Math.PI);
+                }
+                const diff = arc_length_second.map(len => len - (L_second + L_first + w + w / 2));
+                let min_diff = Infinity;
+                let index = -1;
+                for (let i = 0; i < diff.length; i++) {
+                    if (Math.abs(diff[i]) < min_diff) {
+                        min_diff = Math.abs(diff[i]);
+                        index = i;
+                    }
+                }
+                second_true = arc_length_second[index] - w - (L_first) - w / 2;
+
+                // 可视化
+                const point1_theta_val = solveThetaNewton(a_pos, b_pos, 0, L_first + w / 2);
+                tab1_theta_rad = point1_theta_val + sep_theta + neg_theta;
+                point1_r = a_pos + b_pos * point1_theta_val;
+                windingData.push({
+                    x: [point1_r * Math.cos(tab1_theta_rad)],
+                    y: [point1_r * Math.sin(tab1_theta_rad)],
+                    mode: 'markers',
+                    marker: { color: 'red', size: 8 },
+                    name: 'tab1'
+                });
+
+                const point2_theta_val = solveThetaNewton(a_pos, b_pos, 0, L_first + w + second_true + w / 2);
+                tab2_theta_rad = point2_theta_val + sep_theta + neg_theta;
+                point2_r = a_pos + b_pos * point2_theta_val;
+                windingData.push({
+                    x: [point2_r * Math.cos(tab2_theta_rad)],
+                    y: [point2_r * Math.sin(tab2_theta_rad)],
+                    mode: 'markers',
+                    marker: { color: 'red', size: 8 },
+                    name: 'tab2'
+                });
+            } else {
+                alert('请输入正确的计算标签，neg或者pos');
+                return;
+            }
+
+            const windingLayout = {
+               // title: 'Winding Geometry',
+                xaxis: { title: 'X (mm)' },
+                yaxis: { title: 'Y (mm)', scaleanchor: "x", scaleratio: 1 },
+                legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1 }
+            };
+
+            Plotly.newPlot('windingPlot', windingData, windingLayout);
+
+            // 9. 涂布后滚压前数据
+            const L_B_1 = L_first;
+            const L_B_2 = w;
+            const L_B_3 = second_true;
+            const L_B_4 = w;
+            const L_B_5 = (calculate_flag === "neg" ? neg_length : pos_length) - L_B_1 - L_B_2 - L_B_3 - L_B_4;
+            const L_A_1 = L_B_1 / el_rate;
+            const L_A_2 = L_B_2 / el_rate;
+            const L_A_3 = L_B_3 / el_rate;
+            const L_A_4 = L_B_4 / el_rate;
+            const L_A_5 = L_B_5 / el_rate;
+
+            const width = 200;
+            const dimensionsData = [
+                {
+                    x: [0, L_B_1, L_B_1, 0, 0],
+                    y: [0, 0, width, width, 0],
+                    fill: 'toself',
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `L_B_1 = ${L_B_1.toFixed(2)}`,
+                    marker: { color: 'red' }
+                },
+                {
+                    x: [L_B_1, L_B_1 + L_B_2, L_B_1 + L_B_2, L_B_1, L_B_1],
+                    y: [0, 0, width, width, 0],
+                    fill: 'toself',
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `w = ${L_B_2.toFixed(2)}`,
+                    marker: { color: 'green' }
+                },
+                {
+                    x: [L_B_1 + L_B_2, L_B_1 + L_B_2 + L_B_3, L_B_1 + L_B_2 + L_B_3, L_B_1 + L_B_2, L_B_1 + L_B_2],
+                    y: [0, 0, width, width, 0],
+                    fill: 'toself',
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `L_B_3 = ${L_B_3.toFixed(2)}`,
+                    marker: { color: 'blue' }
+                },
+                {
+                    x: [L_B_1 + L_B_2 + L_B_3, L_B_1 + L_B_2 + L_B_3 + L_B_4, L_B_1 + L_B_2 + L_B_3 + L_B_4, L_B_1 + L_B_2 + L_B_3, L_B_1 + L_B_2 + L_B_3],
+                    y: [0, 0, width, width, 0],
+                    fill: 'toself',
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `w = ${L_B_4.toFixed(2)}`,
+                    marker: { color: 'yellow' }
+                },
+                {
+                    x: [L_B_1 + L_B_2 + L_B_3 + L_B_4, L_B_1 + L_B_2 + L_B_3 + L_B_4 + L_B_5, L_B_1 + L_B_2 + L_B_3 + L_B_4 + L_B_5, L_B_1 + L_B_2 + L_B_3 + L_B_4, L_B_1 + L_B_2 + L_B_3 + L_B_4],
+                    y: [0, 0, width, width, 0],
+                    fill: 'toself',
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `L_B_5 = ${L_B_5.toFixed(2)}`,
+                    marker: { color: 'magenta' }
+                }
+            ];
+
+            const dimensionsLayout = {
+                title: '压后尺寸矩形排列',
+                xaxis: { title: 'Length (mm)' },
+                yaxis: { title: 'Height (mm)', range: [0, width] }
+            };
+            Plotly.newPlot('dimensionsPlot', dimensionsData, dimensionsLayout);
+
+            const logOutput = document.getElementById('log-output');
+            logOutput.innerHTML += `<p>示意图： |---L1---|-w-|---L3---|-w-|---L5---|</p>`;
+            logOutput.innerHTML += `<p>压后尺寸：|---${L_B_1.toFixed(2)}---|-${L_B_2.toFixed(2)}-|---${L_B_3.toFixed(2)}---|-${L_B_4.toFixed(2)}-|---${L_B_5.toFixed(2)}---|</p>`;
+            logOutput.innerHTML += `<p>压前尺寸：|---${L_A_1.toFixed(2)}---|-${L_A_2.toFixed(2)}-|---${L_A_3.toFixed(2)}---|-${L_A_4.toFixed(2)}-|---${L_A_5.toFixed(2)}---|</p>`;
+        }
+    </script>
+</body>
+</html>
